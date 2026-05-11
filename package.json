@@ -1,8 +1,6 @@
 {
 
   "name": "@boltearth/react-native-sdk-ios-android",
-  
-  "@boltearth/react-native-sdk-ios-android": "github:adilkhanboltearth/modifiedrniosandroid#main"
 
   "version": "1.0.0",
 
