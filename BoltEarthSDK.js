@@ -34,8 +34,9 @@ const notIOS = async () => {
  * @typedef {object} BoltInitializeOptions
  * @property {string} clientID
  * @property {string} sdkToken
- * @property {string} appPackageId
+ * @property {string} [appPackageId] — iOS only; ignored on Android (environment drives package resolution).
  * @property {'staging'|'production'} [environment='staging']
+ *   Android: `'production'` sends the host app's package name; anything else sends the internal test id.
  * @property {string|null} [language] — ISO 639-1 alpha-2; omit or null for device default
  * @property {string} [sdkRegularFontName]
  * @property {string} [sdkBoldFontName]
@@ -49,7 +50,7 @@ function initConfigFromBoltOptions(options) {
   const base = {
     userId: options.clientID,
     sdkToken: options.sdkToken,
-    sdkPackage: options.appPackageId,
+    environment: options.environment === 'production' ? 'production' : 'development',
   };
   if (options.sdkThemeColorHex != null && options.sdkThemeColorHex !== '') {
     base.primaryColor = options.sdkThemeColorHex;
@@ -68,10 +69,8 @@ function toNativeInitMap(config) {
   const map = {
     userId: config.userId,
     sdkToken: config.sdkToken,
+    environment: config.environment === 'production' ? 'production' : 'development',
   };
-  if (config.sdkPackage != null) {
-    map.sdkPackage = config.sdkPackage;
-  }
   if (config.primaryColor != null) {
     map.primaryColor = config.primaryColor;
   }
@@ -91,9 +90,9 @@ export async function initializeWithOptions(options) {
   }
   if (androidReady) {
     const o = options;
-    if (o == null || !o.clientID || !o.sdkToken || !o.appPackageId) {
+    if (o == null || !o.clientID || !o.sdkToken) {
       throw new Error(
-        '[BoltEarthSDK] initializeWithOptions requires clientID, sdkToken, and appPackageId.',
+        '[BoltEarthSDK] initializeWithOptions requires clientID and sdkToken.',
       );
     }
     BoltEarthUiSdk.initialize(toNativeInitMap(initConfigFromBoltOptions(o)));
@@ -126,7 +125,7 @@ export function initializeLegacy(
     const cfg = {
       userId: clientID,
       sdkToken,
-      sdkPackage: appPackageId,
+      environment: environment === 'production' ? 'production' : 'development',
     };
     if (language != null && language !== '') {
       cfg.localeLanguageTag = language;
