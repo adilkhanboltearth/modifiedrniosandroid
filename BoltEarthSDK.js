@@ -85,8 +85,7 @@ export async function initializeWithOptions(options) {
         '[BoltEarthSDK] initializeWithOptions on Android requires clientID and sdkToken.',
       );
     }
-    BoltEarthUiSdk.initialize(toAndroidInitMap(o));
-    return;
+    return BoltEarthUiSdk.initialize(toAndroidInitMap(o));
   }
   return warnNativeUnavailable();
 }
@@ -126,8 +125,7 @@ export function initializeLegacy(clientID, sdkToken, ...rest) {
     if (language != null && language !== '') {
       cfg.localeLanguageTag = language;
     }
-    BoltEarthUiSdk.initialize(cfg);
-    return;
+    return BoltEarthUiSdk.initialize(cfg);
   }
 }
 
@@ -167,7 +165,7 @@ export async function setLanguage(code) {
     return BoltEarthBridge.setLanguageCode(code ?? null);
   }
   if (androidReady) {
-    return;
+    return BoltEarthUiSdk.setLocale(code ?? '');
   }
   return warnNativeUnavailable();
 }
@@ -178,7 +176,7 @@ export async function getCurrentLanguageCode() {
     return BoltEarthBridge.currentLanguageCode();
   }
   if (androidReady) {
-    return 'en';
+    return BoltEarthUiSdk.getCurrentLanguageCode();
   }
   await warnNativeUnavailable();
   return 'en';
@@ -190,7 +188,7 @@ export async function getSupportedLanguageCodes() {
     return BoltEarthBridge.supportedLanguageCodes();
   }
   if (androidReady) {
-    return [];
+    return BoltEarthUiSdk.getSupportedLanguageCodes();
   }
   await warnNativeUnavailable();
   return [];
