@@ -8,6 +8,7 @@ import com.boltearthsdk.BoltEarthUiSdk
 import com.boltearthsdk.BoltLogoutResult
 import com.boltearthsdk.SdkEnvironment
 import com.boltearthsdk.SdkFontOverrides
+import com.boltearthsdk.VehicleType
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
@@ -127,14 +128,49 @@ class BoltEarthUiSdkModule(reactContext: ReactApplicationContext) :
     }
   }
 
+  /**
+   * Opens the charger booking flow with a preselected vehicle.
+   *
+   * SDK 1.0.16+ requires a vehicle mapper key, vehicle type and current SOC (they preselect and lock
+   * the vehicle and set the SOC-slider floor). These come from the JS `options`:
+   *   - `vehicleId` (or `vehicleMapperKey`) — an OEM vehicle `externalKey` from fetchOEMVehicles()
+   *   - `vehicleType` — "TWO_WHEELER" | "THREE_WHEELER" | "FOUR_WHEELER"
+   *   - `initialSOCPercent` — 0..100 (defaults to 0 when omitted)
+   */
   @ReactMethod
-  fun openChargerBookingFlow(promise: Promise) {
+  fun openChargerBookingFlow(options: ReadableMap, promise: Promise) {
     try {
       val launchContext =
         reactApplicationContext.currentActivity
           ?: newTaskApplicationContext(reactApplicationContext)
-      BoltEarthUiSdk.openChargerBookingFlow(launchContext)
+
+      val vehicleId = when {
+        options.hasKey("vehicleId") -> options.getString("vehicleId").orEmpty()
+        options.hasKey("vehicleMapperKey") -> options.getString("vehicleMapperKey").orEmpty()
+        else -> ""
+      }
+      val vehicleTypeName =
+        if (options.hasKey("vehicleType")) options.getString("vehicleType").orEmpty() else ""
+      val vehicleType = when (vehicleTypeName.uppercase()) {
+        "TWO_WHEELER" -> VehicleType.TWO_WHEELER
+        "THREE_WHEELER" -> VehicleType.THREE_WHEELER
+        "FOUR_WHEELER" -> VehicleType.FOUR_WHEELER
+        else -> throw IllegalArgumentException(
+          "openChargerBookingFlow: vehicleType must be TWO_WHEELER, THREE_WHEELER or FOUR_WHEELER (was \"$vehicleTypeName\")."
+        )
+      }
+      val initialSocPercent =
+        if (options.hasKey("initialSOCPercent")) options.getInt("initialSOCPercent") else 0
+
+      BoltEarthUiSdk.openChargerBookingFlow(
+        launchContext,
+        vehicleId,
+        vehicleType,
+        initialSocPercent,
+      )
       promise.resolve(null)
+    } catch (e: IllegalArgumentException) {
+      promise.reject("E_OPEN_CHARGER_BOOKING_INVALID_ARGS", e.message, e)
     } catch (e: Exception) {
       promise.reject("E_OPEN_CHARGER_BOOKING", e.message, e)
     }
