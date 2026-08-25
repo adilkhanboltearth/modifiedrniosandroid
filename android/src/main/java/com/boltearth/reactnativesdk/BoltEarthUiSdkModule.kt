@@ -57,12 +57,14 @@ class BoltEarthUiSdkModule(reactContext: ReactApplicationContext) :
         } else {
           SdkFontOverrides()
         }
-      val sdkHeaderLogoName =
-        if (config.hasKey("sdkHeaderLogoName")) config.getString("sdkHeaderLogoName") else null
       // Raw image bytes, base64-encoded, from the RN/JS side — no native res/drawable entry
-      // required. Takes precedence over sdkHeaderLogoName when both are set (see SdkHeaderView).
+      // required (see SdkHeaderView).
       val sdkHeaderLogoBase64 =
         if (config.hasKey("sdkHeaderLogoBase64")) config.getString("sdkHeaderLogoBase64") else null
+      // Same pattern for the header's home button. Unlike the logo, leaving this null keeps the
+      // SDK's own bundled home icon instead of hiding the button.
+      val sdkHeaderHomeIconBase64 =
+        if (config.hasKey("sdkHeaderHomeIconBase64")) config.getString("sdkHeaderHomeIconBase64") else null
 
       BoltEarthUiSdk.initialize(
         context = ctx,
@@ -72,8 +74,8 @@ class BoltEarthUiSdkModule(reactContext: ReactApplicationContext) :
         primaryColor = primaryColor,
         fonts = fonts,
         localeLanguageTag = localeLanguageTag,
-        sdkHeaderLogoName = sdkHeaderLogoName,
         sdkHeaderLogoBase64 = sdkHeaderLogoBase64,
+        sdkHeaderHomeIconBase64 = sdkHeaderHomeIconBase64,
         onHeaderHomeTapped = { emitHeaderHomeTapped() },
       )
       promise.resolve(null)
