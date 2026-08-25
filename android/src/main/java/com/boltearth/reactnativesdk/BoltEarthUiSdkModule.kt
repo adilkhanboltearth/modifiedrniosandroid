@@ -18,6 +18,7 @@ import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.bridge.WritableArray
 import com.facebook.react.bridge.WritableMap
 import com.facebook.react.module.annotations.ReactModule
+import com.facebook.react.modules.core.DeviceEventManagerModule
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -56,15 +57,19 @@ class BoltEarthUiSdkModule(reactContext: ReactApplicationContext) :
         } else {
           SdkFontOverrides()
         }
+      val sdkHeaderLogoName =
+        if (config.hasKey("sdkHeaderLogoName")) config.getString("sdkHeaderLogoName") else null
 
       BoltEarthUiSdk.initialize(
-        ctx,
-        userId,
-        sdkToken,
-        environment,
-        primaryColor,
-        fonts,
-        localeLanguageTag,
+        context = ctx,
+        userId = userId,
+        sdkToken = sdkToken,
+        environment = environment,
+        primaryColor = primaryColor,
+        fonts = fonts,
+        localeLanguageTag = localeLanguageTag,
+        sdkHeaderLogoName = sdkHeaderLogoName,
+        onHeaderHomeTapped = { emitHeaderHomeTapped() },
       )
       promise.resolve(null)
     } catch (e: IllegalArgumentException) {
@@ -86,12 +91,12 @@ class BoltEarthUiSdkModule(reactContext: ReactApplicationContext) :
   }
 
   @ReactMethod
-  fun openUsersBookingsList(promise: Promise) {
+  fun openUsersBookingsList(shouldShowHeader: Boolean, promise: Promise) {
     try {
       val launchContext =
         reactApplicationContext.currentActivity
           ?: newTaskApplicationContext(reactApplicationContext)
-      BoltEarthUiSdk.openUsersBookingsList(launchContext)
+      BoltEarthUiSdk.openUsersBookingsList(launchContext, shouldShowHeader)
       promise.resolve(null)
     } catch (e: Exception) {
       promise.reject("E_OPEN_BOOKINGS", e.message, e)
@@ -128,11 +133,18 @@ class BoltEarthUiSdkModule(reactContext: ReactApplicationContext) :
     }
   }
 
+  /**
+   * `vehicleType` is optional — the native SDK now derives the vehicle's type from the matched
+   * `vehicleId` catalog entry itself. It's only consulted as a fallback selector when `vehicleId`
+   * doesn't match any cached vehicle; pass `null` to skip that fallback and fail outright instead.
+   */
   @ReactMethod
   fun openChargerBookingFlow(
     vehicleId: String,
-    vehicleType: String,
     initialSOCPercent: Int,
+    chargerId: String?,
+    shouldShowHeader: Boolean,
+    vehicleType: String?,
     promise: Promise,
   ) {
     try {
@@ -140,10 +152,12 @@ class BoltEarthUiSdkModule(reactContext: ReactApplicationContext) :
         reactApplicationContext.currentActivity
           ?: newTaskApplicationContext(reactApplicationContext)
       BoltEarthUiSdk.openChargerBookingFlow(
-        launchContext,
-        vehicleId,
-        VehicleType.valueOf(vehicleType),
-        initialSOCPercent,
+        context = launchContext,
+        vehicleId = vehicleId,
+        initialSOCPercent = initialSOCPercent,
+        chargerId = chargerId,
+        shouldShowHeader = shouldShowHeader,
+        vehicleType = vehicleType?.let { VehicleType.valueOf(it) },
       )
       promise.resolve(null)
     } catch (e: IllegalArgumentException) {
@@ -158,12 +172,12 @@ class BoltEarthUiSdkModule(reactContext: ReactApplicationContext) :
    * Mirrors iOS `BoltEarthBridge.presentWalletFlow`.
    */
   @ReactMethod
-  fun presentWalletFlow(promise: Promise) {
+  fun presentWalletFlow(shouldShowHeader: Boolean, promise: Promise) {
     try {
       val launchContext =
         reactApplicationContext.currentActivity
           ?: newTaskApplicationContext(reactApplicationContext)
-      BoltEarthUiSdk.presentWalletFlow(launchContext)
+      BoltEarthUiSdk.presentWalletFlow(launchContext, shouldShowHeader)
       promise.resolve(null)
     } catch (e: Exception) {
       promise.reject("E_PRESENT_WALLET", e.message, e)
@@ -223,6 +237,26 @@ class BoltEarthUiSdkModule(reactContext: ReactApplicationContext) :
       promise.reject("E_FETCH_CONTACT_SUPPORT", e.message, e)
     }
   }
+
+  /**
+   * `BoltEarthUiSdk.initialize`'s `onHeaderHomeTapped` is a plain Kotlin lambda that lives for the
+   * process's lifetime, not a per-call Promise — it can fire many times, so it's forwarded to JS as
+   * a [DeviceEventManagerModule.RCTDeviceEventEmitter] event rather than resolved through a Promise.
+   * JS subscribes via `new NativeEventEmitter(NativeModules.BoltEarthUiSdk)`.
+   */
+  private fun emitHeaderHomeTapped() {
+    reactApplicationContext
+      .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+      .emit(EVENT_HEADER_HOME_TAPPED, null)
+  }
+
+  /** Required by [com.facebook.react.modules.core.DeviceEventManagerModule] / `NativeEventEmitter`; no-op. */
+  @ReactMethod
+  fun addListener(eventName: String) {}
+
+  /** Required by [com.facebook.react.modules.core.DeviceEventManagerModule] / `NativeEventEmitter`; no-op. */
+  @ReactMethod
+  fun removeListeners(count: Int) {}
 
   private fun newTaskApplicationContext(appContext: Context): Context {
     return object : ContextWrapper(appContext) {
@@ -308,5 +342,6 @@ class BoltEarthUiSdkModule(reactContext: ReactApplicationContext) :
 
   companion object {
     const val NAME = "BoltEarthUiSdk"
+    const val EVENT_HEADER_HOME_TAPPED = "BoltEarthUiSdkHeaderHomeTapped"
   }
 }
