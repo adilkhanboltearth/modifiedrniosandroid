@@ -49,7 +49,12 @@ const warnNativeUnavailable = async () => {
  *   **your app module** (`res/drawable`), shown centered in the optional branded header. Hidden if
  *   not found. Only rendered for flows opened with `shouldShowHeader: true` (see
  *   {@link presentChargerFlow}, {@link presentBookingHistoryFlow}, {@link presentWalletFlow}).
- *   Pair with {@link addHeaderHomeTappedListener} to react to the header's home button.
+ *   Ignored when `sdkHeaderLogoBase64` is also supplied. Pair with
+ *   {@link addHeaderHomeTappedListener} to react to the header's home button.
+ * @property {string} [sdkHeaderLogoBase64] — **Android only** — the header logo's raw image bytes,
+ *   base64-encoded (e.g. from a bundled JS asset), decoded natively into a bitmap. No native
+ *   `res/drawable` entry required — use this instead of `sdkHeaderLogoName` when the logo lives only
+ *   on the RN/JS side. Takes precedence over `sdkHeaderLogoName` when both are set.
  */
 
 /**
@@ -77,6 +82,9 @@ function toAndroidInitMap(options) {
   }
   if (o.sdkHeaderLogoName != null && o.sdkHeaderLogoName !== '') {
     map.sdkHeaderLogoName = o.sdkHeaderLogoName;
+  }
+  if (o.sdkHeaderLogoBase64 != null && o.sdkHeaderLogoBase64 !== '') {
+    map.sdkHeaderLogoBase64 = o.sdkHeaderLogoBase64;
   }
   return map;
 }
