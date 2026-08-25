@@ -45,16 +45,15 @@ const warnNativeUnavailable = async () => {
  * @property {boolean} [verboseLoggingEnabled] — **iOS only**
  * @property {{ light?: number, regular?: number, medium?: number, semiBold?: number, bold?: number }} [fontOverrides]
  *   **Android only** — forwarded to `BoltEarthUiSdk.initialize` when present.
- * @property {string} [sdkHeaderLogoName] — **Android only** — a drawable resource name from
- *   **your app module** (`res/drawable`), shown centered in the optional branded header. Hidden if
- *   not found. Only rendered for flows opened with `shouldShowHeader: true` (see
- *   {@link presentChargerFlow}, {@link presentBookingHistoryFlow}, {@link presentWalletFlow}).
- *   Ignored when `sdkHeaderLogoBase64` is also supplied. Pair with
- *   {@link addHeaderHomeTappedListener} to react to the header's home button.
  * @property {string} [sdkHeaderLogoBase64] — **Android only** — the header logo's raw image bytes,
  *   base64-encoded (e.g. from a bundled JS asset), decoded natively into a bitmap. No native
- *   `res/drawable` entry required — use this instead of `sdkHeaderLogoName` when the logo lives only
- *   on the RN/JS side. Takes precedence over `sdkHeaderLogoName` when both are set.
+ *   `res/drawable` entry required. Hidden if omitted or undecodable. Only rendered for flows opened
+ *   with `shouldShowHeader: true` (see {@link presentChargerFlow}, {@link presentBookingHistoryFlow},
+ *   {@link presentWalletFlow}). Pair with {@link addHeaderHomeTappedListener} to react to the
+ *   header's home button.
+ * @property {string} [sdkHeaderHomeIconBase64] — **Android only** — the home button's raw image
+ *   bytes, base64-encoded, decoded the same way as `sdkHeaderLogoBase64`. Unlike the logo, the
+ *   button never hides — if omitted or undecodable, the SDK's own bundled home icon is used instead.
  */
 
 /**
@@ -80,11 +79,11 @@ function toAndroidInitMap(options) {
   if (o.fontOverrides != null) {
     map.fontOverrides = o.fontOverrides;
   }
-  if (o.sdkHeaderLogoName != null && o.sdkHeaderLogoName !== '') {
-    map.sdkHeaderLogoName = o.sdkHeaderLogoName;
-  }
   if (o.sdkHeaderLogoBase64 != null && o.sdkHeaderLogoBase64 !== '') {
     map.sdkHeaderLogoBase64 = o.sdkHeaderLogoBase64;
+  }
+  if (o.sdkHeaderHomeIconBase64 != null && o.sdkHeaderHomeIconBase64 !== '') {
+    map.sdkHeaderHomeIconBase64 = o.sdkHeaderHomeIconBase64;
   }
   return map;
 }
@@ -162,7 +161,7 @@ export function initializeLegacy(clientID, sdkToken, ...rest) {
  *   "scan a QR code" step and opens on the manual entry screen with this value prefilled. See
  *   `BoltEarthUiSdk.openChargerBookingFlow`'s native KDoc for the exact prefill/validate behaviour.
  * @param {boolean} [options.shouldShowHeader] — **Android only** — shows the optional branded
- *   header (configured via `sdkHeaderLogoName` at {@link initializeWithOptions}) above this flow.
+ *   header (configured via `sdkHeaderLogoBase64` at {@link initializeWithOptions}) above this flow.
  *   Defaults to `false`.
  * @returns {Promise<void>}
  */
