@@ -16,7 +16,7 @@
  * - Host app Gradle / Hilt / Bolt UI SDK per integration docs.
  */
 
-import { NativeModules, Platform } from 'react-native';
+import { NativeEventEmitter, NativeModules, Platform } from 'react-native';
 
 const BoltEarthBridge = NativeModules.BoltEarthBridge;
 const BoltEarthUiSdk = NativeModules.BoltEarthUiSdk;
@@ -45,6 +45,11 @@ const warnNativeUnavailable = async () => {
  * @property {boolean} [verboseLoggingEnabled] — **iOS only**
  * @property {{ light?: number, regular?: number, medium?: number, semiBold?: number, bold?: number }} [fontOverrides]
  *   **Android only** — forwarded to `BoltEarthUiSdk.initialize` when present.
+ * @property {string} [sdkHeaderLogoName] — **Android only** — a drawable resource name from
+ *   **your app module** (`res/drawable`), shown centered in the optional branded header. Hidden if
+ *   not found. Only rendered for flows opened with `shouldShowHeader: true` (see
+ *   {@link presentChargerFlow}, {@link presentBookingHistoryFlow}, {@link presentWalletFlow}).
+ *   Pair with {@link addHeaderHomeTappedListener} to react to the header's home button.
  */
 
 /**
@@ -69,6 +74,9 @@ function toAndroidInitMap(options) {
   }
   if (o.fontOverrides != null) {
     map.fontOverrides = o.fontOverrides;
+  }
+  if (o.sdkHeaderLogoName != null && o.sdkHeaderLogoName !== '') {
+    map.sdkHeaderLogoName = o.sdkHeaderLogoName;
   }
   return map;
 }
@@ -136,7 +144,18 @@ export function initializeLegacy(clientID, sdkToken, ...rest) {
  * Throws `BOLT_PRESENT_VALIDATION` if the mapper key is empty or SOC is out of range,
  * and `BOLT_INVALID_VEHICLE_TYPE` if `vehicleType` is not a recognised string.
  *
- * @param {BoltPresentChargerOptions} options
+ * **Android** derives the vehicle's type from the matched `vehicleMapperKey` catalog entry
+ * itself — `vehicleType` is optional and only used as a fallback selector when
+ * `vehicleMapperKey` doesn't match any cached vehicle; omit it to fail outright instead.
+ *
+ * @param {BoltPresentChargerOptions & { chargerId?: string | null, shouldShowHeader?: boolean }} options
+ * @param {string} [options.vehicleType] — required on iOS; optional on Android (see above).
+ * @param {string} [options.chargerId] — **Android only** — a known Bolt charger ID; skips the
+ *   "scan a QR code" step and opens on the manual entry screen with this value prefilled. See
+ *   `BoltEarthUiSdk.openChargerBookingFlow`'s native KDoc for the exact prefill/validate behaviour.
+ * @param {boolean} [options.shouldShowHeader] — **Android only** — shows the optional branded
+ *   header (configured via `sdkHeaderLogoName` at {@link initializeWithOptions}) above this flow.
+ *   Defaults to `false`.
  * @returns {Promise<void>}
  */
 export async function presentChargerFlow(options) {
@@ -148,15 +167,19 @@ export async function presentChargerFlow(options) {
     const o = options ?? {};
     return BoltEarthUiSdk.openChargerBookingFlow(
       o.vehicleMapperKey,
-      o.vehicleType,
       o.initialSOCPercent,
+      o.chargerId ?? null,
+      !!o.shouldShowHeader,
+      o.vehicleType ?? null,
     );
   }
   return warnNativeUnavailable();
 }
 
 /**
- * @param {{ bookingId?: string | null }} [options] — forwarded on **iOS** only; unused on Android.
+ * @param {{ bookingId?: string | null, shouldShowHeader?: boolean }} [options] — `bookingId` is
+ *   forwarded on **iOS** only (unused on Android); `shouldShowHeader` is **Android only** (shows
+ *   the optional branded header above this flow, default `false`; ignored on iOS).
  * @returns {Promise<void>}
  */
 export async function presentBookingHistoryFlow(options) {
@@ -164,12 +187,13 @@ export async function presentBookingHistoryFlow(options) {
     return BoltEarthBridge.presentBookingHistoryFlow(options ?? {});
   }
   if (androidReady) {
-    if (__DEV__ && options?.bookingId) {
+    const o = options ?? {};
+    if (__DEV__ && o.bookingId) {
       console.warn(
         '[BoltEarthSDK] bookingId is not used by BoltEarthUiSdk.openUsersBookingsList.',
       );
     }
-    return BoltEarthUiSdk.openUsersBookingsList();
+    return BoltEarthUiSdk.openUsersBookingsList(!!o.shouldShowHeader);
   }
   return warnNativeUnavailable();
 }
@@ -220,17 +244,20 @@ export async function fetchCharger(chargerId) {
  * Opens the wallet flow (balance, transaction history, add money) — iOS and Android.
  *
  * **iOS:** rejects with `BOLT_WALLET` if the SDK raises an error during initialisation (e.g. missing
- * user data), or `BOLT_NO_VC` if no presenting view controller can be resolved.
+ * user data), or `BOLT_NO_VC` if no presenting view controller can be resolved. `options` is ignored.
  * **Android:** rejects with `E_PRESENT_WALLET` if the flow can't be launched.
  *
+ * @param {{ shouldShowHeader?: boolean }} [options] — **Android only** — shows the optional
+ *   branded header above this flow. Defaults to `false`. Ignored on iOS.
  * @returns {Promise<void>}
  */
-export async function presentWalletFlow() {
+export async function presentWalletFlow(options) {
   if (iosReady) {
     return BoltEarthBridge.presentWalletFlow();
   }
   if (androidReady) {
-    return BoltEarthUiSdk.presentWalletFlow();
+    const o = options ?? {};
+    return BoltEarthUiSdk.presentWalletFlow(!!o.shouldShowHeader);
   }
   return warnNativeUnavailable();
 }
@@ -355,6 +382,34 @@ export async function logout() {
   return false;
 }
 
+const HEADER_HOME_TAPPED_EVENT = 'BoltEarthUiSdkHeaderHomeTapped';
+let androidHeaderEventEmitter = null;
+
+/**
+ * Subscribes to the optional branded header's home-button tap.
+ *
+ * **Android only** — the native side fires this after the SDK dismisses its current flow
+ * (`shouldShowHeader: true` on {@link presentChargerFlow}, {@link presentBookingHistoryFlow}, or
+ * {@link presentWalletFlow}). Since the underlying native callback lives for the process's
+ * lifetime rather than per flow call, subscribe once (e.g. at app startup) rather than per screen.
+ * No-op on iOS/unsupported platforms — returns a subscription whose `.remove()` is safe to call.
+ *
+ * @param {() => void} callback
+ * @returns {{ remove: () => void }} Subscription — call `.remove()` to unsubscribe.
+ */
+export function addHeaderHomeTappedListener(callback) {
+  if (!androidReady) {
+    if (__DEV__) {
+      console.warn('[BoltEarthSDK] addHeaderHomeTappedListener is only supported on Android currently.');
+    }
+    return { remove: () => {} };
+  }
+  if (!androidHeaderEventEmitter) {
+    androidHeaderEventEmitter = new NativeEventEmitter(BoltEarthUiSdk);
+  }
+  return androidHeaderEventEmitter.addListener(HEADER_HOME_TAPPED_EVENT, callback);
+}
+
 const BoltEarthSDK = {
   initializeWithOptions,
   initialize: initializeLegacy,
@@ -371,6 +426,7 @@ const BoltEarthSDK = {
   getSupportedLanguageCodes,
   setVerboseLoggingEnabled,
   getVerboseLoggingEnabled,
+  addHeaderHomeTappedListener,
 };
 
 export default BoltEarthSDK;
