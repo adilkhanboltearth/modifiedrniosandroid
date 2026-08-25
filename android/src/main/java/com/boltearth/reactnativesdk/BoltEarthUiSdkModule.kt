@@ -59,6 +59,10 @@ class BoltEarthUiSdkModule(reactContext: ReactApplicationContext) :
         }
       val sdkHeaderLogoName =
         if (config.hasKey("sdkHeaderLogoName")) config.getString("sdkHeaderLogoName") else null
+      // Raw image bytes, base64-encoded, from the RN/JS side — no native res/drawable entry
+      // required. Takes precedence over sdkHeaderLogoName when both are set (see SdkHeaderView).
+      val sdkHeaderLogoBase64 =
+        if (config.hasKey("sdkHeaderLogoBase64")) config.getString("sdkHeaderLogoBase64") else null
 
       BoltEarthUiSdk.initialize(
         context = ctx,
@@ -69,6 +73,7 @@ class BoltEarthUiSdkModule(reactContext: ReactApplicationContext) :
         fonts = fonts,
         localeLanguageTag = localeLanguageTag,
         sdkHeaderLogoName = sdkHeaderLogoName,
+        sdkHeaderLogoBase64 = sdkHeaderLogoBase64,
         onHeaderHomeTapped = { emitHeaderHomeTapped() },
       )
       promise.resolve(null)
